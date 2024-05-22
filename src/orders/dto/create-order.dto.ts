@@ -1,6 +1,6 @@
 import { OrderStatus } from "@prisma/client";
 import {
-  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsEnum,
@@ -35,7 +35,7 @@ export class CreateOrderDto {
   */
 
   @IsArray()
-  @ArrayMaxSize(1)
+  @ArrayMinSize(1)
   @ValidateNested({each: true})
   @Type(() => OrderItemDto)
   items: OrderItemDto[];
