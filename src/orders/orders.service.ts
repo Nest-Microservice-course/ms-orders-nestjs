@@ -23,15 +23,61 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
       data: createOrderDto
     });*/
 
-    const ids = createOrderDto.items.map(item => item.productId);
+    try {
+      const productIds = createOrderDto.items.map(item => item.productId);
+      const products: any[] = await firstValueFrom(this.productsClient.send({ cmd: 'validate_products' }, productIds));
 
-    const products = await firstValueFrom(this.productsClient.send({ cmd: 'validate_products' }, ids));
+      const totalAmount = createOrderDto.items.reduce((acc, orderItem) => {
+        const item = products.find(product => product.id === orderItem.productId);
+        return item.price * orderItem.quantity;
+      }, 0);
 
-    return {
-      service: 'OrdersService',
-      createOrderDto,
-      products
+      const totalItems = createOrderDto.items.reduce((acc, orderItem) => {
+        return acc + orderItem.quantity;
+      }, 0);
+
+      const order = await this.order.create({
+        data: {
+          totalAmount,
+          totalItems,
+          OrderItem: {
+            createMany: {
+              data: createOrderDto.items.map(item => {
+                return {
+                  price: products.find(product => product.id === item.productId).price,
+                  productId: item.productId,
+                  quantity: item.quantity,
+                }
+              })
+            }
+          }
+        },
+        include: {
+          OrderItem: {
+            select: {
+              price: true,
+              productId: true,
+              quantity: true,
+            }
+          }
+        }
+      });
+
+      return {
+        ...order,
+        OrderItem: order.OrderItem.map(item => ({
+          ...item,
+          name: products.find(product => product.id === item.productId).name
+        }))
+      };
+    } catch ( error ) {
+      throw new RpcException( {
+        status: HttpStatus.BAD_REQUEST,
+        message: error.message
+      } );
     }
+
+
   }
 
   async findAll(paginationDto: OrderPaginationDto) {
